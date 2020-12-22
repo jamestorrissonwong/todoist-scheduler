@@ -1,0 +1,11 @@
+# Don't push anything cached by Python
+__pycache__/*
+
+# I'm using text files contain debugging info and my own Todoist API token
+*.txt
+
+# Used for OAUTH 2 with Google
+client_secret.json
+
+# Saved authorization information
+*.pickle
