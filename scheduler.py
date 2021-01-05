@@ -19,23 +19,19 @@ def main():
         print('Failed to sync\n')
         exit
 
-    # print(api.state['projects'])
-    # print(api.state['items'])
+    todoist_integration.todoist_parent_child(api)
 
     to_be_scheduled = parse_sort.parse_due(api)
 
-    # for item in to_be_scheduled:
-    #   print(item)
-
-    # priority_lists = parse_sort.priority(to_be_scheduled)
+    priority_lists = parse_sort.priority(to_be_scheduled)
 
     google_service = google_calendar_integration.cal_auth()
     
-    # free_list = get_free_blocks(google_service)
+    free_list = google_calendar_integration.get_free_blocks(google_service)
 
     # events = make_schedule(priority_lists, free_list)
 
-    # google_calendar_integration.add_events(events)
+    #google_calendar_integration.add_events(events, google_service)
 
 
 
