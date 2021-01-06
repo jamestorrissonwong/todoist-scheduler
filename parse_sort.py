@@ -88,7 +88,7 @@ def merge(a, b):
 
     for i in a:
         for j in b:
-            if(a.time < b.time):
+            if(i.time < j.time):
                 sorted.append(j)
                 b.remove(j)
                 continue
@@ -170,7 +170,38 @@ def priority(item_list):
             
     return p_list
 
-def make_schedule(item_list, calendar_list):
 
+def make_schedule(api, item_list, calendar_list, key_order):
 
-    return 0
+    event_list = []
+    print(len(item_list))
+
+    for i in item_list:
+        time = i.time
+        data = i.data
+        pid = data['project_id']
+        project = api.projects.get_by_id(pid)
+        project_name = project['name']
+        desc = data['content']
+        time_delta = datetime.timedelta(minutes=time)
+
+        for j in key_order:
+            day = calendar_list[j]
+            if (len(day) == 0):
+                continue
+            (free_start, free_end) = day.pop()
+            free_delta = free_end - free_start
+
+            if (time_delta < free_delta):
+                new_start = free_start + time_delta
+                day.insert(0, (new_start, free_end))
+                event_list.append((project_name, desc, free_start.isoformat(), new_start.isoformat()))
+                break
+            elif (time_delta > free_delta):
+                time_delta = time_delta - free_delta
+                event_list.append((project_name, desc, free_start.isoformat(), free_end.isoformat())) 
+            else:
+                event_list.append((project_name, desc, free_start.isoformat(), free_end.isoformat())) 
+                break
+
+    return event_list

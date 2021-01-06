@@ -26,12 +26,16 @@ def main():
     priority_lists = parse_sort.priority(to_be_scheduled)
 
     google_service = google_calendar_integration.cal_auth()
+
+    google_calendar_integration.clear_cal(google_service)
     
-    free_list = google_calendar_integration.get_free_blocks(google_service)
+    (free_list, key_order) = google_calendar_integration.get_free_blocks(google_service)
 
-    # events = make_schedule(priority_lists, free_list)
+    print(priority_lists, free_list)
 
-    #google_calendar_integration.add_events(events, google_service)
+    events = parse_sort.make_schedule(api, priority_lists, free_list, key_order)
+
+    google_calendar_integration.add_events(events, google_service)
 
 
 

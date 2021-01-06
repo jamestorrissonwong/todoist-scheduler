@@ -66,6 +66,7 @@ def check_overlap(blocks):
 
 def coalesce_blocks(blocks):
     coalesced = []
+    key_order = []
     
     (has_overlap, t1, t2) = check_overlap(blocks)
 
@@ -93,6 +94,7 @@ def coalesce_blocks(blocks):
         d = datetime.now() + (dt.timedelta(days=i))
         key = d.strftime("%d")
         busy_by_day[key] = []
+        key_order.append(key)
 
     for block in coalesced:
         (s,e) = block
@@ -101,15 +103,79 @@ def coalesce_blocks(blocks):
         free_list.append((s,e))
         busy_by_day[key] = free_list
 
-    return busy_by_day
+    return (busy_by_day, key_order)
+
+def merge(a, b):
+    sorted = []
+
+    for i in a:
+        for j in b:
+            (x, y) = i
+            (x2, y2) = j
+            if(x < x2):
+                sorted.append(j)
+                b.remove(j)
+                continue
+            else:
+                sorted.append(i)
+                a.remove(i)
+                break
+
+    return sorted
+
+# sort
+def sort_busy(list):
+    n = len(list)
+    if ((n == 1) | (n == 0)):
+        return list
+    else:    
+        x = int(n/2)
+        y = x + 1
+        l1 = list[:x]
+        l2 = list[y:]
+
+        left = sort_busy(l1)
+        right = sort_busy(l2)
+
+        sorted = merge(left, right)
+        #print(sorted)
+        return sorted
 
 def free_from_busy(blocks):
     free_time = {}
 
+    for day in blocks:
+        blocks[day] = sort_busy(blocks[day])
+
+    start = (datetime.now()).replace(tzinfo=dt.timezone(dt.timedelta(hours=-8)))
+    end = start.replace(hour=22, minute=0, second=0)
+
     for i in blocks:
-        free_time[i] = []
+        tmp = []
+        
+        if (len(blocks[i]) == 0):
+            tmp.append((start, end))
+            free_time[i] = tmp
+            start = start.replace(day=(start.day + 1), hour=8, minute=0, second=0)
+            end = start.replace(hour=22, minute=0, second=0)
+            continue
 
-
+        for (s, e) in (blocks[i]):
+            if (s < start):
+                start = e
+                continue
+            elif (e > end):
+                break
+            else:
+                tmp.append((start, s))
+                start = e
+                
+        print(tmp)
+        free_time[i] = tmp
+        start = start.replace(day=(start.day + 1), hour=8, minute=0, second=0)
+        end = start.replace(hour=22, minute=0, second=0)
+        
+    return free_time
 
 
 def get_free_blocks(service):
@@ -131,7 +197,6 @@ def get_free_blocks(service):
         for calendar_list_entry in calendar_list['items']:
             calendar_dict = {'id': calendar_list_entry['id']}
             ids.append(calendar_dict)
-            #print(calendar_list_entry['id'])
         
         page_token = calendar_list.get('nextPageToken')
         if not page_token:
@@ -162,12 +227,13 @@ def get_free_blocks(service):
         busy_blocks.append((start_date, end_date))
 
     
-    coalesced_blocks = coalesce_blocks(busy_blocks)
-    print(coalesced_blocks)
+    (coalesced_blocks, key_order) = coalesce_blocks(busy_blocks)
+
+    print(len(coalesced_blocks))
 
     free_blocks = free_from_busy(coalesced_blocks)
-    
-    return 0 #free_blocks
+
+    return (free_blocks, key_order)
 
 
 def add_events(event_list, service):
@@ -187,14 +253,16 @@ def add_events(event_list, service):
             break
 
     print(calendar_id)
-
-    # 
-    # if (calendar_id == None):
-    #     todoist_calendar_json = {
-    #         'summary':'Todoist Scheduler',
-    #     }
-    #     todoist_calendar = service.calendars().insert# (body=todoist_calendar_json).execute()
-    #     print(todoist_calendar['id'])
+    print('len')
+    print(len(event_list))
+    
+    if (calendar_id == None):
+        todoist_calendar_json = {
+            'summary':'Todoist Scheduler',
+        }
+        todoist_calendar = service.calendars().insert(body=todoist_calendar_json).execute()
+        print(todoist_calendar['id'])
+        calendar_id = todoist_calendar['id']
 
     for event in event_list: 
         (name, desc, start, end) = event
@@ -210,6 +278,52 @@ def add_events(event_list, service):
             }
         }
 
-        service.events().insert(calendar_id=calendar_id, body=event).execute()
+        service.events().insert(calendarId=calendar_id, body=event_json).execute()
 
     return 0
+
+
+def clear_cal(service):
+
+    delete_list = []
+
+    calendar_id = None
+    calendar_name = 'Todoist Scheduler'
+
+    while True:
+        calendar_list = service.calendarList().list().execute()
+        for calendar_list_entry in calendar_list['items']:
+            if (calendar_list_entry['summary'] == calendar_name):
+                calendar_id = calendar_list_entry['id']
+                break
+        page_token = calendar_list.get('nextPageToken')
+        if not page_token:
+            break
+
+    if (calendar_id == None):
+        return
+
+    start = datetime.now().replace(microsecond=0) 
+    delta = dt.timedelta(days=7)
+    end = start + delta
+    start = start.isoformat() + "-08:00"
+    end = end.isoformat() + "-08:00"
+
+    print(start)
+    print(end)
+
+    request = {
+        "timeMin": start,
+        "timeZone": "PST",
+        "calendarId": calendar_id
+    }
+
+    page_token = None
+    while True:
+        events = service.events().list(calendarId=calendar_id, pageToken=page_token).execute()
+        for event in events['items']:
+            print(event)
+            service.events().delete(calendarId=calendar_id, eventId=event['id']).execute()
+        page_token = events.get('nextPageToken')
+        if not page_token:
+            break
